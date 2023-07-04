@@ -1,0 +1,85 @@
+#ifndef __DICT_H__
+#define __DICT_H__
+
+#include <stdio.h>
+#include <wchar.h>
+#include <assert.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdarg.h>
+#include <stdint.h>
+#include <stddef.h>
+#include <stdbool.h>
+
+
+typedef enum
+{
+    DICT_CHAR,     // char
+    DICT_WCHAR,    // wchar_t
+    DICT_I32,      // int32_t
+    DICT_U32,      // uint32_t
+    DICT_F32,      // float
+    DICT_I64,      // int64_t
+    DICT_U64,      // uint64_t
+    DICT_F64,      // double
+    DICT_PTR,      // void*
+    DICT_STR,      // char*
+    DICT_STRUCT,   // struct
+} dict_type_t;
+
+typedef void (*dict_deep_copy)( void** dest, const void* restrict src );    // if not specified, memcpy will be performed for DICT_STRUCT, strdup will be performed for DICT_STR, shallow copy for all others
+typedef void (*dict_desctructor)( void* ptr );                              // needs to be specified if has inner allocation
+
+typedef int (*dict_cmpr)( const void* ptr1, const void* ptr2 );             // used to compare if key is equal, return 0 if equal. 
+typedef uint64_t (*dict_hash)( const void* ptr );                           // return the hash code of the type. Two equal object should return the same code. 
+
+typedef void* (*dict_malloc)( size_t size );                                // malloc for custom allocator
+typedef void  (*dict_free)( void* ptr );                                    // free for custom alloc
+
+typedef struct
+{
+    dict_malloc    malloc;      // must be provided if a custom alloc is desired
+    dict_free      free;        // not necessary, because things like an arena alloc may not have a free function
+} dict_alloc_t;
+
+typedef struct
+{
+    dict_type_t         type;
+    size_t              size;
+    dict_deep_copy      copy;   // if not provided, memcpy for DICT_STRUCT, and strdup for DICT_STR, shallow copy for DICT_PTR. 
+    dict_desctructor    free;   // only needed if copy is provided
+    dict_hash           hash;
+    dict_cmpr           cmpr;
+} dict_key_attr_t;
+
+typedef struct
+{
+    size_t              size;
+    dict_desctructor    free;   // free the inside alloation, the value address space is managed by the library. 
+} dict_val_attr_t;
+
+typedef struct
+{
+    dict_key_attr_t     key;    // key attribute
+    dict_val_attr_t     val;    // val attribute
+    dict_alloc_t        alloc;  // cumstom alloc set for dict
+} dict_args_t;
+
+typedef struct dict dict_t;
+
+
+
+
+// function
+dict_t*     dict_create( dict_args_t args );
+void        dict_destroy( dict_t* dict );
+void*       dict_get( dict_t* dict, ... );
+
+
+
+// dict_create_args( dict_key_attr_t key, dict_key_attr_t val, dict_alloc_t alloc )
+#define dict_create_args( ... )                     dict_create( (dict_args_t) { __VA_ARGS__ } )
+
+
+
+#endif  // __DICT_H__
