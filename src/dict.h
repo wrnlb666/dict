@@ -27,7 +27,7 @@ typedef enum
     DICT_STRUCT,   // struct
 } dict_type_t;
 
-typedef void (*dict_deep_copy)( void** dest, const void* restrict src );    // if not specified, memcpy will be performed for DICT_STRUCT, strdup will be performed for DICT_STR, shallow copy for all others
+typedef void (*dict_deep_copy)( void* dest, const void* restrict src );     // if not specified, memcpy will be performed for DICT_STRUCT, strdup will be performed for DICT_STR, shallow copy for all others
 typedef void (*dict_desctructor)( void* ptr );                              // needs to be specified if has inner allocation
 
 typedef int (*dict_cmpr)( const void* ptr1, const void* ptr2 );             // used to compare if key is equal, return 0 if equal. 
@@ -71,13 +71,18 @@ typedef struct dict dict_t;
 
 
 // function
-dict_t*     dict_create( dict_args_t args );
-void        dict_destroy( dict_t* dict );
-void*       dict_get( dict_t* dict, ... );
-
+dict_t*     dict_create( dict_args_t args );                    // dictionary constructor, return a pointer of `dict_t`
+void        dict_destroy( dict_t* dict );                       // dictionary destructor. Free the memory used by dict, also free each key and value if destructor provided. 
+void*       dict_get( dict_t* dict, /* T key */... );           // for DICT_STRUCT, pass in the address of the struct
+bool        dict_remove( dict_t* dict, /* T key */... );        // for DICT_STRUCT, pass in the address of the struct. Return true if key deleted and it was in the dict. 
+bool        dict_has( const dict_t* dict, /* T key */... );     // for DICT_STRUCT, pass in the address of the struct. Return true if key is in the dict. 
+const void* dict_key( const dict_t* dict, size_t* size );       // return an array contains all the keys of the dict unordered. The array is allocated by `alloc.malloc` if specified, otherwise libc malloc is used. Don't change the key in the array since shallow copy is used. 
 
 
 // dict_create_args( dict_key_attr_t key, dict_key_attr_t val, dict_alloc_t alloc )
+// .key = { .type, .size, .copy, .free, .hash, .cmpr }
+// .val = { .size, .free }
+// .alloc = { .malloc, .free }
 #define dict_create_args( ... )                     dict_create( (dict_args_t) { __VA_ARGS__ } )
 
 
