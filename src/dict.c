@@ -84,6 +84,178 @@ static inline bool dict_reshape( dict_t* dict )
 }
 
 
+static inline void* dict_get_key( const dict_t* dict, va_list ap )
+{
+    void* key;
+    if ( dict->key.copy != NULL )
+    {
+        void* data = va_arg( ap, void* );
+        key = dict->alloc.malloc( dict->key.size );
+        if ( key == NULL )
+        {
+            fprintf( stderr, "[ERRO]: out of memory.\n" );
+            exit(1);
+        }
+        dict->key.copy( key, data );
+    }
+    else
+    {
+        key = dict->alloc.malloc( dict->key.size );
+        if ( key == NULL )
+        {
+            fprintf( stderr, "[ERRO]: out of memory.\n" );
+            exit(1);
+        }
+        switch ( dict->key.type )
+        {
+            case DICT_CHAR:         *(char*)        key = va_arg( ap, int );          break;
+            case DICT_WCHAR:        *(wchar_t*)     key = va_arg( ap, int );          break;
+            case DICT_I32:          *(int32_t*)     key = va_arg( ap, int32_t );      break;
+            case DICT_U32:          *(uint32_t*)    key = va_arg( ap, uint32_t );     break;
+            case DICT_F32:          *(float*)       key = va_arg( ap, double );       break;
+            case DICT_I64:          *(int64_t*)     key = va_arg( ap, int64_t );      break;
+            case DICT_U64:          *(uint64_t*)    key = va_arg( ap, uint64_t );     break;
+            case DICT_F64:          *(double*)      key = va_arg( ap, double );       break;
+            case DICT_PTR:          *(void**)       key = va_arg( ap, void* );        break;
+            case DICT_STR:
+            {
+                char* str = va_arg( ap, char* );
+                *(char**) key = dict->alloc.malloc( strlen(str) + 1 );
+                if ( *(char**) key == NULL )
+                {
+                    fprintf( stderr, "[ERRO]: out of memory.\n" );
+                    exit(1);
+                }
+                strcpy( *(char**) key, str );
+                break;
+            }
+            case DICT_STRUCT:
+            {
+                void* data = va_arg( ap, void* );
+                memcpy( key, data, dict->key.size );
+                break;
+            }
+            default:
+            {
+                return ( fprintf( stderr, "[ERRO]: illegal type.\n" ), exit(1), NULL );
+            }
+        }
+    }
+    return key;
+}
+
+
+static inline uint64_t dict_get_hash( const dict_t* dict, void* key )
+{
+    uint64_t code = 0;
+    if ( dict->key.hash != NULL )
+    {
+        code = dict->key.hash( key );
+    }
+    else
+    {
+        size_t length;
+        switch ( dict->key.type )
+        {
+            case DICT_CHAR:         code = *(char*)     key;    break;
+            case DICT_WCHAR:        code = *(wchar_t*)  key;    break;
+            case DICT_I32:          code = *(int32_t*)  key;    break;
+            case DICT_U32:          code = *(uint32_t*) key;    break;
+            case DICT_F32:          code = *(float*)    key;    break;
+            case DICT_I64:          code = *(int64_t*)  key;    break;
+            case DICT_U64:          code = *(uint64_t*) key;    break;
+            case DICT_F64:          code = *(double*)   key;    break;
+            case DICT_PTR:
+            {
+                code = *(uintptr_t*) key;
+                break;
+            }
+            case DICT_STR:          
+                length = strlen( *(char**) key );
+                for ( size_t i = 0; i < length; i++ )
+                {
+                    code = ( code * HASH_BASE + ( *(char**) key )[i] ) % HASH_MOD;
+                }
+                break;
+            case DICT_STRUCT:
+                length = dict->key.size;
+                for ( size_t i = 0; i < length; i++ )
+                {
+                    code = ( code * HASH_BASE + ( (char*) key )[i] ) % HASH_MOD;
+                }
+                break;
+            default:
+            {
+                fprintf( stderr, "[ERRO]: illegal type.\n" );
+                exit(1);
+            }
+        }
+    }
+    return code;
+}
+
+
+static inline void dict_free_key( const dict_t* dict, void* key )
+{
+    if ( dict->key.copy != NULL && dict->key.free != NULL )
+    {
+        dict->key.free( key );
+    }
+    else if ( dict->key.type == DICT_STR )
+    {
+        dict->alloc.free( *(char**) key );
+    }
+    if ( dict->alloc.free != NULL )
+    {
+        dict->alloc.free( key );
+    }
+}
+
+
+static inline void dict_free_val( const dict_t* dict, void* val )
+{
+    if ( dict->val.free != NULL )
+    {
+        dict->val.free( val );
+    }
+    if ( dict->alloc.free != NULL )
+    {
+        dict->alloc.free( val );
+    }
+}
+
+
+static inline void dict_free_node( const dict_t* dict, dict_elem_t* node )
+{
+    if ( dict->alloc.free != NULL )
+    {
+        dict->alloc.free( node );
+    }
+}
+
+
+static inline void dict_delete_node( dict_list_t* list, dict_elem_t* curr )
+{
+    if ( curr == list->head )
+    {
+        list->head = curr->next;
+    }
+    if ( curr == list->tail )
+    {
+        list->tail = curr->prev;
+    }
+    if ( curr->prev != NULL )
+    {
+        curr->prev->next = curr->next;
+    }
+    if ( curr->next != NULL )
+    {
+        curr->next->prev = curr->prev;
+    }
+    list->size--;
+}
+
+
 dict_t* dict_create( dict_args_t args )
 {
     size_t key_size;
@@ -157,33 +329,10 @@ void dict_destroy( dict_t* dict )
         while ( curr != NULL )
         {
             next = curr->next;
-
-            if ( dict->key.copy != NULL && dict->key.free != NULL )
-            {
-                dict->key.free( curr->key );
-            }
-            else if ( dict->key.type == DICT_STR )
-            {
-                dict->alloc.free( *(char**) curr->key );
-            }
-            if ( dict->alloc.free != NULL )
-            {
-                dict->alloc.free( curr->key );
-            }
-
-            if ( dict->val.free != NULL )
-            {
-                dict->val.free( curr->val );
-            }
-            if ( dict->alloc.free != NULL )
-            {
-                dict->alloc.free( curr->val );
-            }
-
-            if ( dict->alloc.free != NULL )
-            {
-                dict->alloc.free( curr );
-            }
+            
+            dict_free_key( dict, curr->key );
+            dict_free_val( dict, curr->val );
+            dict_free_node( dict, curr );
 
             curr = next;
         }
@@ -204,108 +353,12 @@ void* dict_get( dict_t* dict, ... )
     va_start( ap, dict );
 
     // get the key
-    void* key;
-    if ( dict->key.copy != NULL )
-    {
-        void* data = va_arg( ap, void* );
-        key = dict->alloc.malloc( dict->key.size );
-        if ( key == NULL )
-        {
-            fprintf( stderr, "[ERRO]: out of memory.\n" );
-            exit(1);
-        }
-        dict->key.copy( key, data );
-    }
-    else
-    {
-        key = dict->alloc.malloc( dict->key.size );
-        if ( key == NULL )
-        {
-            fprintf( stderr, "[ERRO]: out of memory.\n" );
-            exit(1);
-        }
-        switch ( dict->key.type )
-        {
-            case DICT_CHAR:         *(char*)        key = va_arg( ap, int );          break;
-            case DICT_WCHAR:        *(wchar_t*)     key = va_arg( ap, int );          break;
-            case DICT_I32:          *(int32_t*)     key = va_arg( ap, int32_t );      break;
-            case DICT_U32:          *(uint32_t*)    key = va_arg( ap, uint32_t );     break;
-            case DICT_F32:          *(float*)       key = va_arg( ap, double );       break;
-            case DICT_I64:          *(int64_t*)     key = va_arg( ap, int64_t );      break;
-            case DICT_U64:          *(uint64_t*)    key = va_arg( ap, uint64_t );     break;
-            case DICT_F64:          *(double*)      key = va_arg( ap, double );       break;
-            case DICT_PTR:          *(void**)       key = va_arg( ap, void* );        break;
-            case DICT_STR:
-            {
-                char* str = va_arg( ap, char* );
-                *(char**) key = dict->alloc.malloc( strlen(str) + 1 );
-                if ( *(char**) key == NULL )
-                {
-                    fprintf( stderr, "[ERRO]: out of memory.\n" );
-                    exit(1);
-                }
-                strcpy( *(char**) key, str );
-                break;
-            }
-            case DICT_STRUCT:
-            {
-                void* data = va_arg( ap, void* );
-                memcpy( key, data, dict->key.size );
-                break;
-            }
-            default:
-            {
-                return ( fprintf( stderr, "[ERRO]: illegal type.\n" ), exit(1), NULL );
-            }
-        }
-    }
+    void* key = dict_get_key( dict, ap );
 
     va_end(ap);
 
     // get hash code
-    uint64_t code = 0;
-    if ( dict->key.hash != NULL )
-    {
-        code = dict->key.hash( key );
-    }
-    else
-    {
-        size_t length;
-        switch ( dict->key.type )
-        {
-            case DICT_CHAR:         code = *(char*)     key;    break;
-            case DICT_WCHAR:        code = *(wchar_t*)  key;    break;
-            case DICT_I32:          code = *(int32_t*)  key;    break;
-            case DICT_U32:          code = *(uint32_t*) key;    break;
-            case DICT_F32:          code = *(float*)    key;    break;
-            case DICT_I64:          code = *(int64_t*)  key;    break;
-            case DICT_U64:          code = *(uint64_t*) key;    break;
-            case DICT_F64:          code = *(double*)   key;    break;
-            case DICT_PTR:
-            {
-                code = *(uintptr_t*) key;
-                break;
-            }
-            case DICT_STR:          
-                length = strlen( *(char**) key );
-                for ( size_t i = 0; i < length; i++ )
-                {
-                    code = ( code * HASH_BASE + ( *(char**) key )[i] ) % HASH_MOD;
-                }
-                break;
-            case DICT_STRUCT:
-                length = dict->key.size;
-                for ( size_t i = 0; i < length; i++ )
-                {
-                    code = ( code * HASH_BASE + ( (char*) key )[i] ) % HASH_MOD;
-                }
-                break;
-            default:
-            {
-                return ( fprintf( stderr, "[ERRO]: illegal type.\n" ), exit(1), NULL );
-            }
-        }
-    }
+    uint64_t code = dict_get_hash( dict, key );
 
     // get into the linked list
     size_t index = code % dict->mod;
@@ -316,18 +369,7 @@ void* dict_get( dict_t* dict, ... )
         {
             if ( dict->key.cmpr( curr->key, key ) == 0 )
             {
-                if ( dict->key.copy != NULL && dict->key.free != NULL )
-                {
-                    dict->key.free( key );
-                }
-                else if ( dict->key.type == DICT_STR )
-                {
-                    dict->alloc.free( *(char**) key );
-                }
-                if ( dict->alloc.free != NULL )
-                {
-                    dict->alloc.free( key );
-                }
+                dict_free_key( dict, key );
                 return curr->val;
             }
         }
@@ -348,14 +390,7 @@ void* dict_get( dict_t* dict, ... )
                 {
                     if ( memcmp( curr->key, key, dict->key.size ) == 0 )
                     {
-                        if ( dict->key.copy != NULL && dict->key.free != NULL )
-                        {
-                            dict->key.free( key );
-                        }
-                        if ( dict->alloc.free != NULL )
-                        {
-                            dict->alloc.free( key );
-                        }
+                        dict_free_key( dict, key );
                         return curr->val;
                     }
                     break;
@@ -364,18 +399,7 @@ void* dict_get( dict_t* dict, ... )
                 {
                     if ( strcmp( *(char**) curr->key, *(char**) key ) == 0 )
                     {
-                        if ( dict->key.copy != NULL && dict->key.free != NULL )
-                        {
-                            dict->key.free( key );
-                        }
-                        else
-                        {
-                            dict->alloc.free( *(char**) key );
-                        }
-                        if ( dict->alloc.free != NULL )
-                        {
-                            dict->alloc.free( key );
-                        }
+                        dict_free_key( dict, key );
                         return curr->val;
                     }
                     break;
@@ -423,7 +447,6 @@ void* dict_get( dict_t* dict, ... )
             return NULL;
         }
     }
-    
 
     return elem->val;
 }
@@ -435,108 +458,12 @@ bool dict_remove( dict_t* dict, ... )
     va_start( ap, dict );
 
     // get the key
-    void* key;
-    if ( dict->key.copy != NULL )
-    {
-        void* data = va_arg( ap, void* );
-        key = dict->alloc.malloc( dict->key.size );
-        if ( key == NULL )
-        {
-            fprintf( stderr, "[ERRO]: out of memory.\n" );
-            exit(1);
-        }
-        dict->key.copy( key, data );
-    }
-    else
-    {
-        key = dict->alloc.malloc( dict->key.size );
-        if ( key == NULL )
-        {
-            fprintf( stderr, "[ERRO]: out of memory.\n" );
-            exit(1);
-        }
-        switch ( dict->key.type )
-        {
-            case DICT_CHAR:         *(char*)        key = va_arg( ap, int );          break;
-            case DICT_WCHAR:        *(wchar_t*)     key = va_arg( ap, int );          break;
-            case DICT_I32:          *(int32_t*)     key = va_arg( ap, int32_t );      break;
-            case DICT_U32:          *(uint32_t*)    key = va_arg( ap, uint32_t );     break;
-            case DICT_F32:          *(float*)       key = va_arg( ap, double );       break;
-            case DICT_I64:          *(int64_t*)     key = va_arg( ap, int64_t );      break;
-            case DICT_U64:          *(uint64_t*)    key = va_arg( ap, uint64_t );     break;
-            case DICT_F64:          *(double*)      key = va_arg( ap, double );       break;
-            case DICT_PTR:          *(void**)       key = va_arg( ap, void* );        break;
-            case DICT_STR:
-            {
-                char* str = va_arg( ap, char* );
-                *(char**) key = dict->alloc.malloc( strlen(str) + 1 );
-                if ( *(char**) key == NULL )
-                {
-                    fprintf( stderr, "[ERRO]: out of memory.\n" );
-                    exit(1);
-                }
-                strcpy( *(char**) key, str );
-                break;
-            }
-            case DICT_STRUCT:
-            {
-                void* data = va_arg( ap, void* );
-                memcpy( key, data, dict->key.size );
-                break;
-            }
-            default:
-            {
-                return ( fprintf( stderr, "[ERRO]: illegal type.\n" ), exit(1), NULL );
-            }
-        }
-    }
+    void* key = dict_get_key( dict, ap );
 
     va_end(ap);
 
     // get hash code
-    uint64_t code = 0;
-    if ( dict->key.hash != NULL )
-    {
-        code = dict->key.hash( key );
-    }
-    else
-    {
-        size_t length;
-        switch ( dict->key.type )
-        {
-            case DICT_CHAR:         code = *(char*)     key;    break;
-            case DICT_WCHAR:        code = *(wchar_t*)  key;    break;
-            case DICT_I32:          code = *(int32_t*)  key;    break;
-            case DICT_U32:          code = *(uint32_t*) key;    break;
-            case DICT_F32:          code = *(float*)    key;    break;
-            case DICT_I64:          code = *(int64_t*)  key;    break;
-            case DICT_U64:          code = *(uint64_t*) key;    break;
-            case DICT_F64:          code = *(double*)   key;    break;
-            case DICT_PTR:
-            {
-                code = *(uintptr_t*) key;
-                break;
-            }
-            case DICT_STR:          
-                length = strlen( *(char**) key );
-                for ( size_t i = 0; i < length; i++ )
-                {
-                    code = ( code * HASH_BASE + ( *(char**) key )[i] ) % HASH_MOD;
-                }
-                break;
-            case DICT_STRUCT:
-                length = dict->key.size;
-                for ( size_t i = 0; i < length; i++ )
-                {
-                    code = ( code * HASH_BASE + ( (char*) key )[i] ) % HASH_MOD;
-                }
-                break;
-            default:
-            {
-                return ( fprintf( stderr, "[ERRO]: illegal type.\n" ), exit(1), NULL );
-            }
-        }
-    }
+    uint64_t code = dict_get_hash( dict, key );
 
     // get into the linked list
     size_t index = code % dict->mod;
@@ -547,57 +474,13 @@ bool dict_remove( dict_t* dict, ... )
         {
             if ( dict->key.cmpr( curr->key, key ) == 0 )
             {
-                if ( dict->key.copy != NULL && dict->key.free != NULL )
-                {
-                    dict->key.free( key );
-                }
-                else if ( dict->key.type == DICT_STR )
-                {
-                    dict->alloc.free( *(char**) key );
-                }
-                if ( dict->alloc.free != NULL )
-                {
-                    dict->alloc.free( key );
-                }
+                dict_free_key( dict, key );
                 // redirect node
-                if ( curr == dict->list[ index ].head )
-                {
-                    dict->list[ index ].head = curr->next;
-                }
-                if ( curr == dict->list[ index ].tail )
-                {
-                    dict->list[ index ].tail = curr->prev;
-                }
-                if ( curr->prev != NULL )
-                {
-                    curr->prev->next = curr->next;
-                }
-                if ( curr->next != NULL )
-                {
-                    curr->next->prev = curr->prev;
-                }
-                dict->list[ index ].size--;
+                dict_delete_node( &dict->list[ index ], curr );
                 // delete key and val and node
-                if ( dict->key.copy != NULL && dict->key.free != NULL )
-                {
-                    dict->key.free( curr->key );
-                }
-                if ( dict->alloc.free != NULL )
-                {
-                    dict->alloc.free( curr->key );
-                }
-                if ( dict->val.free != NULL )
-                {
-                    dict->val.free( curr->val );
-                }
-                if ( dict->alloc.free != NULL )
-                {
-                    dict->alloc.free( curr->val );
-                }
-                if ( dict->alloc.free != NULL )
-                {
-                    dict->alloc.free( curr );
-                }
+                dict_free_key( dict, curr->key );
+                dict_free_val( dict, curr->val );
+                dict_free_node( dict, curr );
                 return true;
             }
         }
@@ -618,53 +501,13 @@ bool dict_remove( dict_t* dict, ... )
                 {
                     if ( memcmp( curr->key, key, dict->key.size ) == 0 )
                     {
-                        if ( dict->key.copy != NULL && dict->key.free != NULL )
-                        {
-                            dict->key.free( key );
-                        }
-                        if ( dict->alloc.free != NULL )
-                        {
-                            dict->alloc.free( key );
-                        }
+                        dict_free_key( dict, key );
                         // redirect node
-                        if ( curr == dict->list[ index ].head )
-                        {
-                            dict->list[ index ].head = curr->next;
-                        }
-                        if ( curr == dict->list[ index ].tail )
-                        {
-                            dict->list[ index ].tail = curr->prev;
-                        }
-                        if ( curr->prev != NULL )
-                        {
-                            curr->prev->next = curr->next;
-                        }
-                        if ( curr->next != NULL )
-                        {
-                            curr->next->prev = curr->prev;
-                        }
-                        dict->list[ index ].size--;
+                        dict_delete_node( &dict->list[ index ], curr );
                         // delete key and val and node
-                        if ( dict->key.copy != NULL && dict->key.free != NULL )
-                        {
-                            dict->key.free( curr->key );
-                        }
-                        if ( dict->alloc.free != NULL )
-                        {
-                            dict->alloc.free( curr->key );
-                        }
-                        if ( dict->val.free != NULL )
-                        {
-                            dict->val.free( curr->val );
-                        }
-                        if ( dict->alloc.free != NULL )
-                        {
-                            dict->alloc.free( curr->val );
-                        }
-                        if ( dict->alloc.free != NULL )
-                        {
-                            dict->alloc.free( curr );
-                        }
+                        dict_free_key( dict, curr->key );
+                        dict_free_val( dict, curr->val );
+                        dict_free_node( dict, curr );
                         return true;
                     }
                     break;
@@ -673,57 +516,13 @@ bool dict_remove( dict_t* dict, ... )
                 {
                     if ( strcmp( curr->key, key ) == 0 )
                     {
-                        if ( dict->key.copy != NULL && dict->key.free != NULL )
-                        {
-                            dict->key.free( key );
-                        }
-                        else
-                        {
-                            dict->alloc.free( *(char**) key );
-                        }
-                        if ( dict->alloc.free != NULL )
-                        {
-                            dict->alloc.free( key );
-                        }
+                        dict_free_key( dict, key );
                         // redirect node
-                        if ( curr == dict->list[ index ].head )
-                        {
-                            dict->list[ index ].head = curr->next;
-                        }
-                        if ( curr == dict->list[ index ].tail )
-                        {
-                            dict->list[ index ].tail = curr->prev;
-                        }
-                        if ( curr->prev != NULL )
-                        {
-                            curr->prev->next = curr->next;
-                        }
-                        if ( curr->next != NULL )
-                        {
-                            curr->next->prev = curr->prev;
-                        }
-                        dict->list[ index ].size--;
+                        dict_delete_node( &dict->list[ index ], curr );
                         // delete key and val and node
-                        if ( dict->key.copy != NULL && dict->key.free != NULL )
-                        {
-                            dict->key.free( curr->key );
-                        }
-                        if ( dict->alloc.free != NULL )
-                        {
-                            dict->alloc.free( curr->key );
-                        }
-                        if ( dict->val.free != NULL )
-                        {
-                            dict->val.free( curr->val );
-                        }
-                        if ( dict->alloc.free != NULL )
-                        {
-                            dict->alloc.free( curr->val );
-                        }
-                        if ( dict->alloc.free != NULL )
-                        {
-                            dict->alloc.free( curr );
-                        }
+                        dict_free_key( dict, curr->key );
+                        dict_free_val( dict, curr->val );
+                        dict_free_node( dict, curr );
                         return true;
                     }
                     break;
@@ -737,14 +536,7 @@ bool dict_remove( dict_t* dict, ... )
     }
 
     // doesn't already appear in the list
-    if ( dict->key.copy != NULL && dict->key.free != NULL )
-    {
-        dict->key.free( key );
-    }
-    else if ( dict->alloc.free != NULL )
-    {
-        dict->alloc.free( key );
-    }
+    dict_free_key( dict, key );
     return false;
 }
 
@@ -754,112 +546,11 @@ bool dict_has( const dict_t* dict, ... )
     va_list ap;
     va_start( ap, dict );
 
-    // get the key
-    void* key;
-    if ( dict->key.copy != NULL )
-    {
-        void* data = va_arg( ap, void* );
-        key = dict->alloc.malloc( dict->key.size );
-        if ( key == NULL )
-        {
-            fprintf( stderr, "[ERRO]: out of memory.\n" );
-            exit(1);
-        }
-        dict->key.copy( key, data );
-    }
-    else
-    {
-        if ( dict->key.type != DICT_STR )
-        {
-            key = dict->alloc.malloc( dict->key.size );
-            if ( key == NULL )
-            {
-                fprintf( stderr, "[ERRO]: out of memory.\n" );
-                exit(1);
-            }
-        }
-        switch ( dict->key.type )
-        {
-            case DICT_CHAR:         *(char*)        key = va_arg( ap, int );          break;
-            case DICT_WCHAR:        *(wchar_t*)     key = va_arg( ap, int );          break;
-            case DICT_I32:          *(int32_t*)     key = va_arg( ap, int32_t );      break;
-            case DICT_U32:          *(uint32_t*)    key = va_arg( ap, uint32_t );     break;
-            case DICT_F32:          *(float*)       key = va_arg( ap, double );       break;
-            case DICT_I64:          *(int64_t*)     key = va_arg( ap, int64_t );      break;
-            case DICT_U64:          *(uint64_t*)    key = va_arg( ap, uint64_t );     break;
-            case DICT_F64:          *(double*)      key = va_arg( ap, double );       break;
-            case DICT_PTR:          *(void**)       key = va_arg( ap, void* );        break;
-            case DICT_STR:
-            {
-                char* str = va_arg( ap, char* );
-                key = dict->alloc.malloc( strlen(str) + 1 );
-                if ( key == NULL )
-                {
-                    fprintf( stderr, "[ERRO]: out of memory.\n" );
-                    exit(1);
-                }
-                strcpy( key, str );
-                break;
-            }
-            case DICT_STRUCT:
-            {
-                void* data = va_arg( ap, void* );
-                memcpy( key, data, dict->key.size );
-                break;
-            }
-            default:
-            {
-                return ( fprintf( stderr, "[ERRO]: illegal type.\n" ), exit(1), false );
-            }
-        }
-    }
+    void* key = dict_get_key( dict, ap );
 
     va_end(ap);
 
-    // get hash code
-    uint64_t code = 0;
-    if ( dict->key.hash != NULL )
-    {
-        code = dict->key.hash( key );
-    }
-    else
-    {
-        size_t length;
-        switch ( dict->key.type )
-        {
-            case DICT_CHAR:         code = *(char*)     key;    break;
-            case DICT_WCHAR:        code = *(wchar_t*)  key;    break;
-            case DICT_I32:          code = *(int32_t*)  key;    break;
-            case DICT_U32:          code = *(uint32_t*) key;    break;
-            case DICT_F32:          code = *(float*)    key;    break;
-            case DICT_I64:          code = *(int64_t*)  key;    break;
-            case DICT_U64:          code = *(uint64_t*) key;    break;
-            case DICT_F64:          code = *(double*)   key;    break;
-            case DICT_PTR:
-            {
-                code = *(uintptr_t*) key;
-                break;
-            }
-            case DICT_STR:          
-                length = strlen( *(char**) key );
-                for ( size_t i = 0; i < length; i++ )
-                {
-                    code = ( code * HASH_BASE + ( *(char**) key )[i] ) % HASH_MOD;
-                }
-                break;
-            case DICT_STRUCT:
-                length = dict->key.size;
-                for ( size_t i = 0; i < length; i++ )
-                {
-                    code = ( code * HASH_BASE + ( (char*) key )[i] ) % HASH_MOD;
-                }
-                break;
-            default:
-            {
-                return ( fprintf( stderr, "[ERRO]: illegal type.\n" ), exit(1), NULL );
-            }
-        }
-    }
+    uint64_t code = dict_get_hash( dict, key );
 
     // get into the linked list
     size_t index = code % dict->mod;
@@ -870,18 +561,7 @@ bool dict_has( const dict_t* dict, ... )
         {
             if ( dict->key.cmpr( curr->key, key ) == 0 )
             {
-                if ( dict->key.copy != NULL && dict->key.free != NULL )
-                {
-                    dict->key.free( key );
-                }
-                else if ( dict->key.type == DICT_STR )
-                {
-                    dict->alloc.free( *(char**) key );
-                }
-                if ( dict->alloc.free != NULL )
-                {
-                    dict->alloc.free( key );
-                }
+                dict_free_key( dict, key );
                 return true;
             }
         }
@@ -902,14 +582,7 @@ bool dict_has( const dict_t* dict, ... )
                 {
                     if ( memcmp( curr->key, key, dict->key.size ) == 0 )
                     {
-                        if ( dict->key.copy != NULL && dict->key.free != NULL )
-                        {
-                            dict->key.free( key );
-                        }
-                        if ( dict->alloc.free != NULL )
-                        {
-                            dict->alloc.free( key );
-                        }
+                        dict_free_key( dict, key );
                         return true;
                     }
                     break;
@@ -918,18 +591,7 @@ bool dict_has( const dict_t* dict, ... )
                 {
                     if ( strcmp( curr->key, key ) == 0 )
                     {
-                        if ( dict->key.copy != NULL && dict->key.free != NULL )
-                        {
-                            dict->key.free( key );
-                        }
-                        else
-                        {
-                            dict->alloc.free( *(char**) key );
-                        }
-                        if ( dict->alloc.free != NULL )
-                        {
-                            dict->alloc.free( key );
-                        }
+                        dict_free_key( dict, key );
                         return true;
                     }
                     break;
@@ -943,15 +605,7 @@ bool dict_has( const dict_t* dict, ... )
     }
 
     // doesn't already appear in the list
-    if ( dict->key.copy != NULL && dict->key.free != NULL )
-    {
-        dict->key.free( key );
-    }
-    else if ( dict->alloc.free != NULL )
-    {
-        dict->alloc.free( key );
-    }
-
+    dict_free_key( dict, key );
     return false;
 }
 
