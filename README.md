@@ -1,5 +1,5 @@
 # dict
-dict in pure C
+dict in pure C with runtime generic
 
 ## Example for quick start
 ```c
