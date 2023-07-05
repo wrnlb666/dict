@@ -38,7 +38,7 @@ typedef void  (*dict_free)( void* ptr );                                    // f
 
 typedef struct
 {
-    dict_malloc    malloc;      // must be provided if a custom alloc is desired
+    dict_malloc    malloc;      // must be provided if a custom allocator is desired
     dict_free      free;        // not necessary, because things like an arena alloc may not have a free function
 } dict_alloc_t;
 
@@ -73,7 +73,7 @@ typedef struct dict dict_t;
 // function
 dict_t*     dict_create( dict_args_t args );                    // dictionary constructor, return a pointer of `dict_t`
 void        dict_destroy( dict_t* dict );                       // dictionary destructor. Free the memory used by dict, also free each key and value if destructor provided. 
-void*       dict_get( dict_t* dict, /* T key */... );           // for DICT_STRUCT, pass in the address of the struct
+void*       dict_get( dict_t* dict, /* T key */... );           // for DICT_STRUCT, pass in the address of the struct. Return the address of `val` to the corresponding `key`. Create new key-val pair if the input key was not in the dictionary. 
 bool        dict_remove( dict_t* dict, /* T key */... );        // for DICT_STRUCT, pass in the address of the struct. Return true if key deleted and it was in the dict. 
 bool        dict_has( const dict_t* dict, /* T key */... );     // for DICT_STRUCT, pass in the address of the struct. Return true if key is in the dict. 
 const void* dict_key( const dict_t* dict, size_t* size );       // return an array contains all the keys of the dict unordered. The array is allocated by `alloc.malloc` if specified, otherwise libc malloc is used. Don't change the key in the array since shallow copy is used. 
