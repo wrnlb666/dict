@@ -19,7 +19,7 @@ int main( void )
 
     for ( size_t i = 0; i < 30; i++ )
     {
-        printf( "%5f\n", dict_double( dict, i ) );
+        printf( "%5lf\n", dict_double( dict, i ) );
     }
 
     dict_destroy( dict );
