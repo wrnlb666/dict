@@ -431,6 +431,7 @@ void* dict_get( dict_t* dict, ... )
         fprintf( stderr, "[ERRO]: out of memory.\n" );
         exit(1);
     }
+    memset( elem->val, 0, dict->val.size );
     if ( dict->list[ index ].size == 0 )
     {
         dict->list[ index ].head = dict->list[ index ].tail = elem;
@@ -447,7 +448,6 @@ void* dict_get( dict_t* dict, ... )
             return NULL;
         }
     }
-
     return elem->val;
 }
 
