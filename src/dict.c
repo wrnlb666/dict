@@ -1,9 +1,10 @@
 #include "dict.h"
 
-#define DEFAULT_MOD     16
+#define DEFAULT_MOD     32
 #define DEFAULT_STEP    2
 #define HASH_BASE       256LLU
 #define HASH_MOD        1000000007LLU
+#define ASSERT_MEM(x)   if(x==NULL){fprintf(stderr,"[ERRO]: out of memory.\n");exit(1);}
 
 typedef struct dict_elem dict_elem_t;
 struct dict_elem
@@ -32,10 +33,10 @@ struct dict
 };
 
 
-static inline bool dict_reshape( dict_t* dict )
+static inline bool dict_reshape( dict_t* restrict dict, size_t step )
 {
     size_t old_size = dict->mod;
-    size_t new_size = old_size * DEFAULT_STEP;
+    size_t new_size = old_size * step * DEFAULT_STEP;
 
     dict_list_t* old_list = dict->list;
     dict_list_t* new_list = dict->alloc.malloc( sizeof (dict_list_t) * new_size );
@@ -84,28 +85,20 @@ static inline bool dict_reshape( dict_t* dict )
 }
 
 
-static inline void* dict_get_key( const dict_t* dict, va_list ap )
+static inline void* dict_get_key( const dict_t* restrict dict, va_list ap )
 {
     void* key;
     if ( dict->key.copy != NULL )
     {
         void* data = va_arg( ap, void* );
         key = dict->alloc.malloc( dict->key.size );
-        if ( key == NULL )
-        {
-            fprintf( stderr, "[ERRO]: out of memory.\n" );
-            exit(1);
-        }
+        ASSERT_MEM( key );
         dict->key.copy( key, data );
     }
     else
     {
         key = dict->alloc.malloc( dict->key.size );
-        if ( key == NULL )
-        {
-            fprintf( stderr, "[ERRO]: out of memory.\n" );
-            exit(1);
-        }
+        ASSERT_MEM( key );
         switch ( dict->key.type )
         {
             case DICT_CHAR:         *(char*)        key = va_arg( ap, int );          break;
@@ -121,11 +114,7 @@ static inline void* dict_get_key( const dict_t* dict, va_list ap )
             {
                 char* str = va_arg( ap, char* );
                 *(char**) key = dict->alloc.malloc( strlen(str) + 1 );
-                if ( *(char**) key == NULL )
-                {
-                    fprintf( stderr, "[ERRO]: out of memory.\n" );
-                    exit(1);
-                }
+                ASSERT_MEM( *(char**) key );
                 strcpy( *(char**) key, str );
                 break;
             }
@@ -145,7 +134,7 @@ static inline void* dict_get_key( const dict_t* dict, va_list ap )
 }
 
 
-static inline uint64_t dict_get_hash( const dict_t* dict, void* key )
+static inline uint64_t dict_get_hash( const dict_t* restrict dict, void* restrict key )
 {
     uint64_t code = 0;
     if ( dict->key.hash != NULL )
@@ -281,21 +270,13 @@ dict_t* dict_create( dict_args_t args )
     if ( args.alloc.malloc != NULL )
     {
         dict = args.alloc.malloc( sizeof (dict_t) );
-        if ( dict == NULL )
-        {
-            fprintf( stderr, "[ERRO]: out of memory.\n" );
-            exit(1);
-        }
+        ASSERT_MEM( dict );
         dict->alloc = args.alloc;
     }
     else
     {
         dict = malloc( sizeof (dict_t) );
-        if ( dict == NULL )
-        {
-            fprintf( stderr, "[ERRO]: out of memory.\n" );
-            exit(1);
-        }
+        ASSERT_MEM( dict );
         dict->alloc = (dict_alloc_t)
         {
             .malloc = malloc,
@@ -311,6 +292,7 @@ dict_t* dict_create( dict_args_t args )
 
     dict->mod   = DEFAULT_MOD;
     dict->list  = dict->alloc.malloc( sizeof (dict_list_t) * dict->mod );
+    ASSERT_MEM( dict->list );
     for ( size_t i = 0; i < dict->mod; i++ )
     {
         memset( &( dict->list[i]), 0, sizeof (dict_list_t) );
@@ -320,7 +302,7 @@ dict_t* dict_create( dict_args_t args )
 }
 
 
-void dict_destroy( dict_t* dict )
+void dict_destroy( dict_t* restrict dict )
 {
     for ( size_t i = 0; i < dict->mod; i++ )
     {
@@ -347,7 +329,7 @@ void dict_destroy( dict_t* dict )
 }
 
 
-void* dict_get( dict_t* dict, ... )
+void* dict_get( dict_t* restrict dict, ... )
 {
     va_list ap;
     va_start( ap, dict );
@@ -414,11 +396,7 @@ void* dict_get( dict_t* dict, ... )
 
     // doesn't already appear in the list
     dict_elem_t* elem = dict->alloc.malloc( sizeof (dict_elem_t) );
-    if ( elem == NULL )
-    {
-        fprintf( stderr, "[ERRO]: out of memory.\n" );
-        exit(1);
-    }
+    ASSERT_MEM( elem );
     *elem = (dict_elem_t)
     {
         .code   = code,
@@ -426,11 +404,7 @@ void* dict_get( dict_t* dict, ... )
         .prev   = dict->list[ index ].tail,
         .val    = dict->alloc.malloc( dict->val.size ),
     };
-    if ( elem->val == NULL )
-    {
-        fprintf( stderr, "[ERRO]: out of memory.\n" );
-        exit(1);
-    }
+    ASSERT_MEM( elem->val );
     memset( elem->val, 0, dict->val.size );
     if ( dict->list[ index ].size == 0 )
     {
@@ -443,7 +417,7 @@ void* dict_get( dict_t* dict, ... )
     }
     if ( dict->list[ index ].size++ > dict->mod )
     {
-        if ( dict_reshape(dict) == false )
+        if ( dict_reshape( dict, 1 ) == false )
         {
             return NULL;
         }
@@ -452,7 +426,7 @@ void* dict_get( dict_t* dict, ... )
 }
 
 
-bool dict_remove( dict_t* dict, ... )
+bool dict_remove( dict_t* restrict dict, ... )
 {
     va_list ap;
     va_start( ap, dict );
@@ -541,7 +515,7 @@ bool dict_remove( dict_t* dict, ... )
 }
 
 
-bool dict_has( const dict_t* dict, ... )
+bool dict_has( const dict_t* restrict dict, ... )
 {
     va_list ap;
     va_start( ap, dict );
@@ -610,13 +584,26 @@ bool dict_has( const dict_t* dict, ... )
 }
 
 
-const void* dict_key( const dict_t* dict, size_t* size )
+size_t dict_len( const dict_t* restrict dict )
 {
-    *size = 0;
+    size_t size = 0;
     for ( size_t i = 0; i < dict->mod; i++ )
     {
-        *size += dict->list[i].size;
+        size += dict->list[i].size;
     }
+    return size;
+}
+
+
+const void* dict_key( const dict_t* restrict dict, size_t* restrict size )
+{
+    *size = dict_len( dict );
+
+    if ( *size == 0 )
+    {
+        return NULL;
+    }
+
     char* arr = dict->alloc.malloc( (*size) * dict->key.size );
 
     size_t index = 0;
@@ -631,3 +618,149 @@ const void* dict_key( const dict_t* dict, size_t* size )
 
     return arr;
 }
+
+
+bool dict_serialize( const dict_t* restrict dict, FILE* fp )
+{
+    errno = 0;
+    // store key size and val size
+    uint32_t size = dict_len( dict );
+    uint32_t key_val_size[3] = { dict->key.size, dict->val.size, size };
+    fwrite( &key_val_size, sizeof (uint32_t), 3, fp );
+
+    // store individual items
+    for ( size_t i = 0; i < dict->mod; i++ )
+    {
+        for ( dict_elem_t* curr = dict->list[i].head; curr != NULL; curr = curr->next )
+        {
+            fwrite( curr->key, dict->key.size, 1, fp );
+            fwrite( curr->val, dict->val.size, 1, fp );
+        }
+    }
+    if ( errno != 0 )
+    {
+        fprintf( stderr, "[ERRO]: %s.\n", strerror(errno) );
+        return false;
+    }
+    return true;
+}
+
+
+dict_t* dict_deserialize( dict_args_t args, FILE* fp )
+{
+    uint32_t key_val_size[3];
+    fread( key_val_size, sizeof (uint32_t), 3, fp );
+
+    size_t key_size;
+    switch ( args.key.type )
+    {
+        case DICT_CHAR:    key_size = sizeof ( char );                      break;
+        case DICT_WCHAR:   key_size = sizeof ( wchar_t );                   break;
+        case DICT_I32:     key_size = sizeof ( int32_t );                   break;
+        case DICT_U32:     key_size = sizeof ( uint32_t );                  break;
+        case DICT_F32:     key_size = sizeof ( float );                     break;
+        case DICT_I64:     key_size = sizeof ( int64_t );                   break;
+        case DICT_U64:     key_size = sizeof ( uint64_t );                  break;
+        case DICT_F64:     key_size = sizeof ( double );                    break;
+        case DICT_PTR:     key_size = sizeof ( void* );                     break;
+        case DICT_STR:     key_size = sizeof ( char* );                     break;
+        case DICT_STRUCT:  key_size = args.key.size;                        break;
+        default:           fprintf( stderr, "[ERRO]: illegal type.\n" );    exit(1);
+    }
+
+    size_t val_size = args.val.size;
+
+    if ( key_size != key_val_size[0] )
+    {
+        fprintf( stderr, "[ERRO]: key type conflict, file corrupted.\n" );
+        return NULL;
+    }
+
+    if ( val_size != key_val_size[1] )
+    {
+        fprintf( stderr, "[ERRO]: val type conflict, file corrupted.\n" );
+        return NULL;
+    }
+
+    dict_t* dict = NULL;
+    if ( args.alloc.malloc != NULL )
+    {
+        dict = args.alloc.malloc( sizeof (dict_t) );
+        ASSERT_MEM( dict );
+        dict->alloc = args.alloc;
+    }
+    else
+    {
+        dict = malloc( sizeof (dict_t) );
+        ASSERT_MEM( dict );
+        dict->alloc = (dict_alloc_t)
+        {
+            .malloc = malloc,
+            .free   = free,
+        };
+    }
+
+    dict->key = args.key;
+    dict->key.size = key_size;
+
+    dict->val = args.val;
+    dict->val.size = val_size;
+
+    dict->mod = DEFAULT_MOD;
+    dict->list  = dict->alloc.malloc( sizeof (dict_list_t) * dict->mod );
+    ASSERT_MEM( dict->list );
+    for ( size_t i = 0; i < dict->mod; i++ )
+    {
+        memset( &( dict->list[i]), 0, sizeof (dict_list_t) );
+    }
+
+    // assign all the values
+    size_t index;
+    uint64_t code;
+    dict_elem_t* elem;
+    for ( size_t i = 0; i < key_val_size[2]; i++ )
+    {
+        elem = dict->alloc.malloc( sizeof (dict_elem_t) );
+        ASSERT_MEM( elem );
+        elem->key = dict->alloc.malloc( dict->key.size );
+        ASSERT_MEM( elem->key );
+        fread( elem->key, dict->key.size, 1, fp );
+        elem->val = dict->alloc.malloc( dict->val.size );
+        ASSERT_MEM( elem->key );
+        fread( elem->val, dict->val.size, 1, fp );
+        code = dict_get_hash( dict, elem->key );
+        elem->code = code;
+        index = code % dict->mod;
+        elem->prev = dict->list[ index ].tail;
+        elem->next = NULL;
+        if ( dict->list[ index ].size++ == 0 )
+        {
+            dict->list[ index ].head = dict->list[ index ].tail = elem;
+        }
+        else
+        {
+            dict->list[ index ].tail->next = elem;
+            dict->list[ index ].tail = elem;
+        }
+    }
+
+    size_t max = 0;
+    for ( size_t i = 0; i < dict->mod; i++ )
+    {
+        if ( dict->list[i].size > max )
+        {
+            max = dict->list[i].size;
+        }
+    }
+
+    max /= DEFAULT_MOD;
+    if ( max != 0 )
+    {
+        if ( dict_reshape( dict, max / DEFAULT_MOD ) == false )
+        {
+            return NULL;
+        }
+    }
+    return dict;
+}
+

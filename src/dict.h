@@ -2,6 +2,7 @@
 #define __DICT_H__
 
 #include <stdio.h>
+#include <errno.h>
 #include <wchar.h>
 #include <assert.h>
 #include <stdlib.h>
@@ -68,15 +69,17 @@ typedef struct
 typedef struct dict dict_t;
 
 
-
-
 // function
 dict_t*     dict_create( dict_args_t args );                    // dictionary constructor, return a pointer of `dict_t`
 void        dict_destroy( dict_t* dict );                       // dictionary destructor. Free the memory used by dict, also free each key and value if destructor provided. 
 void*       dict_get( dict_t* dict, /* T key */... );           // for DICT_STRUCT, pass in the address of the struct. Return the address of `val` to the corresponding `key`. Create new key-val pair if the input key was not in the dictionary. 
 bool        dict_remove( dict_t* dict, /* T key */... );        // for DICT_STRUCT, pass in the address of the struct. Return true if key deleted and it was in the dict. 
 bool        dict_has( const dict_t* dict, /* T key */... );     // for DICT_STRUCT, pass in the address of the struct. Return true if key is in the dict. 
+size_t      dict_len( const dict_t* dict );                     // return the total amount of pairs exist in the dict
 const void* dict_key( const dict_t* dict, size_t* size );       // return an array contains all the keys of the dict unordered. The array is allocated by `alloc.malloc` if specified, otherwise libc malloc is used. Don't change the key in the array since shallow copy is used. 
+bool        dict_serialize( const dict_t* dict, FILE* fp );     // only key-val pair without any internal allocation can be serialized. Return true if success. 
+dict_t*     dict_deserialize( dict_args_t args, FILE* fp );     // only key-val pair without any internal allocation can be deserialized. Return `NULL` on failure. 
+
 
 
 // dict_create_args( dict_key_attr_t key, dict_key_attr_t val, dict_alloc_t alloc )
