@@ -5,7 +5,12 @@
 
 int main( void )
 {
-    dict_t* dict1 = dict_create( (dict_args_t) { .key = { .type = DICT_I32 }, .val = { .size = sizeof (double) } } );
+    dict_args_t dict_args = 
+    {
+        .key = { .type = DICT_I32 },
+        .val = { .size = sizeof (double) },
+    };
+    dict_t* dict1 = dict_create( dict_args );
 
     for ( int32_t i = 0; i < 30; i++ )
     {
@@ -22,7 +27,7 @@ int main( void )
     dict_destroy( dict1 );
 
     FILE* fp2 = fopen( "test3.bin", "rb" );
-    dict_t* dict2 = dict_deserialize( (dict_args_t) { .key = { .type = DICT_I32 }, .val = { .size = sizeof (double) } }, fp2 );
+    dict_t* dict2 = dict_deserialize( dict_args, fp2 );
     if ( dict2 == NULL )
     {
         fprintf( stderr, "Fail to deserialize.\n" );

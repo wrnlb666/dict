@@ -49,7 +49,17 @@ int str_cmpr( const void* s1, const void* s2 )
 
 int main( void )
 {
-    dict_t* dict = dict_create_args( .key = { .type = DICT_STRUCT, .size = sizeof (str_t), .copy = str_copy, .free = str_free, .hash = str_hash, .cmpr = str_cmpr }, .val = { .size = sizeof (uint64_t) } );
+    // attribute list for key. 
+    dict_key_attr_t key_attr = 
+    {
+        .type = DICT_STRUCT,
+        .size = sizeof (str_t),
+        .copy = str_copy,
+        .free = str_free,
+        .hash = str_hash,
+        .cmpr = str_cmpr,
+    };
+    dict_t* dict = dict_create_args( .key = key_attr, .val = { .size = sizeof (uint64_t) } );
 
     char* s1 = "s1";
     char* s2 = "s2";
@@ -63,15 +73,15 @@ int main( void )
     dict_uint64( dict, ( &(str_t){ strlen(s4), s4 } ) ) = 4;
     dict_uint64( dict, ( &(str_t){ strlen(s5), s5 } ) ) = 5;
 
-    printf( "%lu\n", dict_uint64( dict, ( &(str_t){ strlen("s4"), "s4" } ) ) );
-    printf( "%d\n", dict_remove( dict, ( &(str_t){ strlen("s5"), "s5" } ) ) );
+    printf( "val: %lu\n", dict_uint64( dict, ( &(str_t){ strlen("s4"), "s4" } ) ) );
+    printf( "remove: %d\n", dict_remove( dict, ( &(str_t){ strlen("s5"), "s3" } ) ) );
 
     size_t size;
     const str_t* arr = dict_key( dict, &size );
-    printf( "%zu\n", size );
+    printf( "key amount: %zu\n", size );
     for ( size_t i = 0; i < size; i++ )
     {
-        printf( "%s\n", arr[i].str );
+        printf( "key[%zu]: %s\n", i, arr[i].str );
     }
     free( (void*)arr );
 

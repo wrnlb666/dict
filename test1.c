@@ -27,7 +27,6 @@ int main( void )
     
     printf( "%ld, %lf\n", temp.x, temp.y );
 
-
     size_t arr_size;
     char* const* arr = dict_key( dict, &arr_size );
     for ( size_t i = 0; i < arr_size; i++ )

@@ -184,7 +184,7 @@ static inline uint64_t dict_get_hash( const dict_t* restrict dict, void* restric
 }
 
 
-static inline void dict_free_key( const dict_t* dict, void* key )
+static inline void dict_free_key( const dict_t* restrict dict, void* restrict key )
 {
     if ( dict->key.copy != NULL && dict->key.free != NULL )
     {
@@ -201,7 +201,7 @@ static inline void dict_free_key( const dict_t* dict, void* key )
 }
 
 
-static inline void dict_free_val( const dict_t* dict, void* val )
+static inline void dict_free_val( const dict_t* restrict dict, void* restrict val )
 {
     if ( dict->val.free != NULL )
     {
@@ -214,7 +214,7 @@ static inline void dict_free_val( const dict_t* dict, void* val )
 }
 
 
-static inline void dict_free_node( const dict_t* dict, dict_elem_t* node )
+static inline void dict_free_node( const dict_t* restrict dict, dict_elem_t* restrict node )
 {
     if ( dict->alloc.free != NULL )
     {
@@ -223,7 +223,7 @@ static inline void dict_free_node( const dict_t* dict, dict_elem_t* node )
 }
 
 
-static inline void dict_delete_node( dict_list_t* list, dict_elem_t* curr )
+static inline void dict_delete_node( dict_list_t* restrict list, dict_elem_t* restrict curr )
 {
     if ( curr == list->head )
     {
@@ -648,8 +648,14 @@ bool dict_serialize( const dict_t* restrict dict, FILE* fp )
 
 dict_t* dict_deserialize( dict_args_t args, FILE* fp )
 {
+    errno = 0;
     uint32_t key_val_size[3];
     fread( key_val_size, sizeof (uint32_t), 3, fp );
+    if ( errno != 0 )
+    {
+        fprintf( stderr, "[ERRO]: %s.\n", strerror(errno) );
+        return NULL;
+    }
 
     size_t key_size;
     switch ( args.key.type )
@@ -742,6 +748,13 @@ dict_t* dict_deserialize( dict_args_t args, FILE* fp )
             dict->list[ index ].tail->next = elem;
             dict->list[ index ].tail = elem;
         }
+    }
+
+    if ( errno != 0 )
+    {
+        fprintf( stderr, "[ERRO]: %s.\n", strerror(errno) );
+        dict_destroy( dict );
+        return NULL;
     }
 
     size_t max = 0;
