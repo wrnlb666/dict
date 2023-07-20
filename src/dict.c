@@ -419,7 +419,6 @@ void* dict_get( dict_t* restrict dict, ... )
         .code   = code,
         .key    = dict->alloc.malloc( dict->key.size ),
         .prev   = dict->list[ index ].tail,
-        .val    = dict->alloc.malloc( dict->val.size ),
     };
     ASSERT_MEM( elem->key );
     if ( dict->val.size != 0 )
