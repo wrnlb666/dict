@@ -250,13 +250,13 @@ dict_t* dict_create( dict_args_t args )
         case DICT_STR:     key_size = sizeof ( char* );                     break;
         case DICT_STRUCT:  
         {
-            key_size = ( args.key.size + sizeof (uintptr_t) - 1 ) / sizeof (uintptr_t) * sizeof (uintptr_t);
+            key_size = ( args.key.size + ( sizeof (uintptr_t) - 1 ) ) & ~( sizeof (uintptr_t) - 1 );
             break;
         }
         default:           fprintf( stderr, "[ERRO]: illegal type.\n" );    exit(1);
     }
 
-    size_t val_size = ( args.val.size + sizeof (uintptr_t) - 1 ) / sizeof (uintptr_t) * sizeof (uintptr_t);
+    size_t val_size = ( args.val.size + ( sizeof (uintptr_t) - 1 ) ) & ~( sizeof (uintptr_t) - 1 );
 
     dict_t* dict = NULL;
     if ( args.alloc.malloc != NULL )
@@ -676,13 +676,13 @@ dict_t* dict_deserialize( dict_args_t args, FILE* fp )
         case DICT_STR:     key_size = sizeof ( char* );                     break;
         case DICT_STRUCT:
         {
-            key_size = ( args.key.size + sizeof (uintptr_t) - 1 ) / sizeof (uintptr_t) * sizeof (uintptr_t);
+            key_size = ( args.key.size + ( sizeof (uintptr_t) - 1 ) ) & ~( sizeof (uintptr_t) - 1 );
             break;
         }
         default:           fprintf( stderr, "[ERRO]: illegal type.\n" );    exit(1);
     }
 
-    size_t val_size = ( args.val.size + sizeof (uintptr_t) - 1 ) / sizeof (uintptr_t) * sizeof (uintptr_t);
+    size_t val_size = ( args.val.size + ( sizeof (uintptr_t) - 1 ) ) & ~( sizeof (uintptr_t) - 1 );
 
     if ( key_size != key_val_size[0] )
     {
