@@ -455,6 +455,7 @@ bool dict_remove( dict_t* restrict dict, ... )
                     dict_free_val( dict, curr->key + dict->key.size );
                 }
                 dict_free_node( dict, curr );
+                dict->list[ index ].size--;
                 return true;
             }
         }
@@ -485,6 +486,7 @@ bool dict_remove( dict_t* restrict dict, ... )
                             dict_free_val( dict, curr->key + dict->key.size );
                         }
                         dict_free_node( dict, curr );
+                        dict->list[ index ].size--;
                         return true;
                     }
                     break;
@@ -503,6 +505,7 @@ bool dict_remove( dict_t* restrict dict, ... )
                             dict_free_val( dict, curr->key + dict->key.size );
                         }
                         dict_free_node( dict, curr );
+                        dict->list[ index ].size--;
                         return true;
                     }
                     break;
@@ -609,7 +612,7 @@ const void* dict_key( const dict_t* restrict dict, size_t* restrict size )
         return NULL;
     }
 
-    char* arr = dict->alloc.malloc( (*size) * dict->key.size );
+    char* arr = dict->alloc.malloc( dict->key.size * (*size) );
 
     size_t index = 0;
     for ( size_t i = 0; i < dict->mod; i++ )
