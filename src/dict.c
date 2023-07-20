@@ -1,6 +1,6 @@
 #include "dict.h"
 
-#define DEFAULT_MOD     32
+#define DEFAULT_MOD     8
 #define DEFAULT_STEP    2
 #define HASH_BASE       256LLU
 #define HASH_MOD        1000000007LLU
