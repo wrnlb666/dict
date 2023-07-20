@@ -30,6 +30,7 @@ struct dict
     dict_alloc_t        alloc;
     size_t              mod;
     dict_list_t*        list;
+    void*               key_temp;
 };
 
 
@@ -87,18 +88,14 @@ static inline bool dict_reshape( dict_t* restrict dict, size_t step )
 
 static inline void* dict_get_key( const dict_t* restrict dict, va_list ap )
 {
-    void* key;
+    void* key = dict->key_temp;
     if ( dict->key.copy != NULL )
     {
         void* data = va_arg( ap, void* );
-        key = dict->alloc.malloc( dict->key.size );
-        ASSERT_MEM( key );
         dict->key.copy( key, data );
     }
     else
     {
-        key = dict->alloc.malloc( dict->key.size );
-        ASSERT_MEM( key );
         switch ( dict->key.type )
         {
             case DICT_CHAR:         *(char*)        key = va_arg( ap, int );          break;
@@ -201,6 +198,19 @@ static inline void dict_free_key( const dict_t* restrict dict, void* restrict ke
 }
 
 
+static inline void dict_try_free_key( const dict_t* restrict dict, void* restrict key )
+{
+    if ( dict->key.copy != NULL && dict->key.free != NULL )
+    {
+        dict->key.free( key );
+    }
+    else if ( dict->key.type == DICT_STR )
+    {
+        dict->alloc.free( *(char**) key );
+    }
+}
+
+
 static inline void dict_free_val( const dict_t* restrict dict, void* restrict val )
 {
     if ( dict->val.free != NULL )
@@ -290,6 +300,9 @@ dict_t* dict_create( dict_args_t args )
     dict->val = args.val;
     dict->val.size = val_size;
 
+    dict->key_temp = dict->alloc.malloc( dict->key.size );
+    ASSERT_MEM( dict->key_temp );
+
     dict->mod   = DEFAULT_MOD;
     dict->list  = dict->alloc.malloc( sizeof (dict_list_t) * dict->mod );
     ASSERT_MEM( dict->list );
@@ -313,7 +326,10 @@ void dict_destroy( dict_t* restrict dict )
             next = curr->next;
             
             dict_free_key( dict, curr->key );
-            dict_free_val( dict, curr->val );
+            if ( dict->val.size != 0 )
+            {
+                dict_free_val( dict, curr->val );
+            }
             dict_free_node( dict, curr );
 
             curr = next;
@@ -322,6 +338,7 @@ void dict_destroy( dict_t* restrict dict )
 
     if ( dict->alloc.free != NULL )
     {
+        dict->alloc.free( dict->key_temp );
         dict->alloc.free( dict->list );
         dict->alloc.free( dict );
         dict = NULL;
@@ -351,7 +368,7 @@ void* dict_get( dict_t* restrict dict, ... )
         {
             if ( dict->key.cmpr( curr->key, key ) == 0 )
             {
-                dict_free_key( dict, key );
+                dict_try_free_key( dict, key );
                 return curr->val;
             }
         }
@@ -372,7 +389,7 @@ void* dict_get( dict_t* restrict dict, ... )
                 {
                     if ( memcmp( curr->key, key, dict->key.size ) == 0 )
                     {
-                        dict_free_key( dict, key );
+                        dict_try_free_key( dict, key );
                         return curr->val;
                     }
                     break;
@@ -381,7 +398,7 @@ void* dict_get( dict_t* restrict dict, ... )
                 {
                     if ( strcmp( *(char**) curr->key, *(char**) key ) == 0 )
                     {
-                        dict_free_key( dict, key );
+                        dict_try_free_key( dict, key );
                         return curr->val;
                     }
                     break;
@@ -400,11 +417,17 @@ void* dict_get( dict_t* restrict dict, ... )
     *elem = (dict_elem_t)
     {
         .code   = code,
-        .key    = key,
+        .key    = dict->alloc.malloc( dict->key.size ),
         .prev   = dict->list[ index ].tail,
         .val    = dict->alloc.malloc( dict->val.size ),
     };
-    ASSERT_MEM( elem->val );
+    ASSERT_MEM( elem->key );
+    if ( dict->val.size != 0 )
+    {
+        elem->val = dict->alloc.malloc( dict->val.size );
+        ASSERT_MEM( elem->val );
+    }
+    memcpy( elem->key, key, dict->key.size );
     memset( elem->val, 0, dict->val.size );
     if ( dict->list[ index ].size == 0 )
     {
@@ -448,12 +471,15 @@ bool dict_remove( dict_t* restrict dict, ... )
         {
             if ( dict->key.cmpr( curr->key, key ) == 0 )
             {
-                dict_free_key( dict, key );
                 // redirect node
+                dict_try_free_key( dict, key );
                 dict_delete_node( &dict->list[ index ], curr );
                 // delete key and val and node
                 dict_free_key( dict, curr->key );
-                dict_free_val( dict, curr->val );
+                if ( dict->val.size != 0 )
+                {
+                    dict_free_val( dict, curr->val );
+                }
                 dict_free_node( dict, curr );
                 return true;
             }
@@ -475,12 +501,15 @@ bool dict_remove( dict_t* restrict dict, ... )
                 {
                     if ( memcmp( curr->key, key, dict->key.size ) == 0 )
                     {
-                        dict_free_key( dict, key );
                         // redirect node
+                        dict_try_free_key( dict, key );
                         dict_delete_node( &dict->list[ index ], curr );
                         // delete key and val and node
                         dict_free_key( dict, curr->key );
-                        dict_free_val( dict, curr->val );
+                        if ( dict->val.size != 0 )
+                        {
+                            dict_free_val( dict, curr->val );
+                        }
                         dict_free_node( dict, curr );
                         return true;
                     }
@@ -490,12 +519,15 @@ bool dict_remove( dict_t* restrict dict, ... )
                 {
                     if ( strcmp( curr->key, key ) == 0 )
                     {
-                        dict_free_key( dict, key );
                         // redirect node
+                        dict_try_free_key( dict, key );
                         dict_delete_node( &dict->list[ index ], curr );
                         // delete key and val and node
                         dict_free_key( dict, curr->key );
-                        dict_free_val( dict, curr->val );
+                        if ( dict->val.size != 0 )
+                        {
+                            dict_free_val( dict, curr->val );
+                        }
                         dict_free_node( dict, curr );
                         return true;
                     }
@@ -510,7 +542,7 @@ bool dict_remove( dict_t* restrict dict, ... )
     }
 
     // doesn't already appear in the list
-    dict_free_key( dict, key );
+    dict_try_free_key( dict, key );
     return false;
 }
 
@@ -535,7 +567,6 @@ bool dict_has( const dict_t* restrict dict, ... )
         {
             if ( dict->key.cmpr( curr->key, key ) == 0 )
             {
-                dict_free_key( dict, key );
                 return true;
             }
         }
@@ -556,7 +587,7 @@ bool dict_has( const dict_t* restrict dict, ... )
                 {
                     if ( memcmp( curr->key, key, dict->key.size ) == 0 )
                     {
-                        dict_free_key( dict, key );
+                        dict_try_free_key( dict, key );
                         return true;
                     }
                     break;
@@ -565,7 +596,7 @@ bool dict_has( const dict_t* restrict dict, ... )
                 {
                     if ( strcmp( curr->key, key ) == 0 )
                     {
-                        dict_free_key( dict, key );
+                        dict_try_free_key( dict, key );
                         return true;
                     }
                     break;
@@ -579,7 +610,7 @@ bool dict_has( const dict_t* restrict dict, ... )
     }
 
     // doesn't already appear in the list
-    dict_free_key( dict, key );
+    dict_try_free_key( dict, key );
     return false;
 }
 
@@ -712,6 +743,9 @@ dict_t* dict_deserialize( dict_args_t args, FILE* fp )
     dict->val = args.val;
     dict->val.size = val_size;
 
+    dict->key_temp = dict->alloc.malloc( dict->key.size );
+    ASSERT_MEM( dict->key_temp );
+
     dict->mod = DEFAULT_MOD;
     dict->list  = dict->alloc.malloc( sizeof (dict_list_t) * dict->mod );
     ASSERT_MEM( dict->list );
@@ -731,9 +765,12 @@ dict_t* dict_deserialize( dict_args_t args, FILE* fp )
         elem->key = dict->alloc.malloc( dict->key.size );
         ASSERT_MEM( elem->key );
         fread( elem->key, dict->key.size, 1, fp );
-        elem->val = dict->alloc.malloc( dict->val.size );
-        ASSERT_MEM( elem->key );
-        fread( elem->val, dict->val.size, 1, fp );
+        if ( dict->val.size != 0 )
+        {
+            elem->val = dict->alloc.malloc( dict->val.size );
+            ASSERT_MEM( elem->val );
+            fread( elem->val, dict->val.size, 1, fp );
+        }
         code = dict_get_hash( dict, elem->key );
         elem->code = code;
         index = code % dict->mod;

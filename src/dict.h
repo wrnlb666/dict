@@ -89,5 +89,4 @@ dict_t*     dict_deserialize( dict_args_t args, FILE* fp );     // only key-val 
 #define dict_create_args( ... )                     dict_create( (dict_args_t) { __VA_ARGS__ } )
 
 
-
 #endif  // __DICT_H__
