@@ -46,34 +46,38 @@ static inline bool dict_reshape( dict_t* restrict dict, size_t step )
     dict->mod   = new_size;
     dict->list  = new_list;
 
-    for ( size_t i = 0; i < new_size; i++ )
-    {
-        memset( &( dict->list[i]), 0, sizeof (dict_list_t) );
-    }
+    memset( dict->list, 0, sizeof (dict_list_t) * new_size );
 
+    dict_elem_t* curr;
+    dict_elem_t* next;
+    uint64_t index;
     for ( size_t i = 0; i < old_size; i++ )
     {
-        dict_elem_t* curr = old_list[i].head;
-        dict_elem_t* next;
+        curr = old_list[i].head;
         while ( curr != NULL )
         {
-            next            = curr->next;
-            uint64_t index  = curr->code % new_size;
+            next    = curr->next;
+            index   = curr->code % new_size;
             
             if ( new_list[ index ].head == NULL )
             {
                 new_list[ index ].head = new_list[ index ].tail = curr;
-                curr->prev = curr->next = NULL;
+                curr->prev = NULL;
             }
             else
             {
                 new_list[ index ].tail->next = curr;
+                new_list[ index ].tail = curr;
                 curr->prev = new_list[ index ].tail;
-                curr->next = NULL;
             }
             new_list[ index ].size++;
             curr = next;
         }
+    }
+
+    for ( size_t i = 0; i < new_size; i++ )
+    {
+        new_list[i].tail->next = NULL;
     }
 
     if ( dict->alloc.free != NULL )
@@ -288,10 +292,7 @@ dict_t* dict_create( dict_args_t args )
     dict->mod   = DEFAULT_MOD;
     dict->list  = dict->alloc.malloc( sizeof (dict_list_t) * dict->mod );
     ASSERT_MEM( dict->list );
-    for ( size_t i = 0; i < dict->mod; i++ )
-    {
-        memset( &( dict->list[i]), 0, sizeof (dict_list_t) );
-    }
+    memset( dict->list, 0, sizeof (dict_list_t) * dict->mod );
 
     return dict;
 }
@@ -450,12 +451,8 @@ bool dict_remove( dict_t* restrict dict, ... )
                 dict_delete_node( &dict->list[ index ], curr );
                 // delete key and val and node
                 dict_free_key( dict, curr->key );
-                if ( dict->val.size != 0 )
-                {
-                    dict_free_val( dict, curr->key + dict->key.size );
-                }
+                dict_free_val( dict, curr->key + dict->key.size );
                 dict_free_node( dict, curr );
-                dict->list[ index ].size--;
                 return true;
             }
         }
@@ -481,12 +478,8 @@ bool dict_remove( dict_t* restrict dict, ... )
                         dict_delete_node( &dict->list[ index ], curr );
                         // delete key and val and node
                         dict_free_key( dict, curr->key );
-                        if ( dict->val.size != 0 )
-                        {
-                            dict_free_val( dict, curr->key + dict->key.size );
-                        }
+                        dict_free_val( dict, curr->key + dict->key.size );
                         dict_free_node( dict, curr );
-                        dict->list[ index ].size--;
                         return true;
                     }
                     break;
@@ -500,12 +493,8 @@ bool dict_remove( dict_t* restrict dict, ... )
                         dict_delete_node( &dict->list[ index ], curr );
                         // delete key and val and node
                         dict_free_key( dict, curr->key );
-                        if ( dict->val.size != 0 )
-                        {
-                            dict_free_val( dict, curr->key + dict->key.size );
-                        }
+                        dict_free_val( dict, curr->key + dict->key.size );
                         dict_free_node( dict, curr );
-                        dict->list[ index ].size--;
                         return true;
                     }
                     break;
@@ -620,7 +609,7 @@ const void* dict_key( const dict_t* restrict dict, size_t* restrict size )
         for ( dict_elem_t* curr = dict->list[i].head; curr != NULL; curr = curr->next )
         {
             memcpy( arr + ( dict->key.size * index ), curr->key, dict->key.size );
-            if ( index++ == *size ) break;
+            if ( index++ == *size ) return arr;
         }
     }
 
