@@ -5,4 +5,6 @@
 *.exe
 *.o
 *.a
+*.bin
+arena.h
 test
