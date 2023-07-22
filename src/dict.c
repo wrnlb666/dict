@@ -764,13 +764,11 @@ dict_t* dict_deserialize( dict_args_t args, FILE* fp )
         }
     }
 
+    if ( max <= DEFAULT_MOD ) return dict;
     max /= DEFAULT_MOD;
-    if ( max != 0 )
+    if ( dict_reshape( dict, max ) == false )
     {
-        if ( dict_reshape( dict, max / DEFAULT_MOD ) == false )
-        {
-            return NULL;
-        }
+        return NULL;
     }
     return dict;
 }
