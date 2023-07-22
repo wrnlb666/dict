@@ -74,7 +74,7 @@ int main( void )
     dict_uint64( dict, ( &(str_t){ strlen(s5), s5 } ) ) = 5;
 
     printf( "val: %lu\n", dict_uint64( dict, ( &(str_t){ strlen("s4"), "s4" } ) ) );
-    printf( "remove: %d\n", dict_remove( dict, ( &(str_t){ strlen("s5"), "s3" } ) ) );
+    printf( "remove: %d\n", dict_remove( dict, ( &(str_t){ strlen("s3"), "s3" } ) ) );
 
     size_t size;
     const str_t* arr = dict_key( dict, &size );

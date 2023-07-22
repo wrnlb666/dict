@@ -12,7 +12,7 @@ int main( void )
     };
     dict_t* dict1 = dict_create( dict_args );
 
-    for ( int32_t i = 0; i < 30; i++ )
+    for ( int32_t i = 0; i < 500; i++ )
     {
         dict_double( dict1, i ) = (double)i;
     }
