@@ -5,7 +5,7 @@
 
 int main( void )
 {
-    dict_t* dict = dict_create( (dict_args_t) { .key = { .type = DICT_I32 }, .val = { .size = sizeof (double) } } );
+    dict_t* dict = dict_new( DICT_I32, 0, sizeof (double) );
 
     for ( int32_t i = 0; i < 30; i++ )
     {

@@ -298,6 +298,24 @@ dict_t* dict_create( dict_args_t args )
 }
 
 
+dict_t* dict_new( dict_type_t key_type, size_t key_size, size_t val_size )
+{
+    return dict_create( (dict_args_t)
+    {
+        .key = (dict_key_attr_t)
+        {
+            .type = key_type,
+            .size = key_size,
+        },
+        .val = (dict_val_attr_t)
+        {
+            .size = val_size,
+        },
+        .alloc = (dict_alloc_t) { 0 },
+    });
+}
+
+
 void dict_destroy( dict_t* restrict dict )
 {
     for ( size_t i = 0; i < dict->mod; i++ )
