@@ -1,6 +1,13 @@
 # dict
 dict in pure C with runtime generic
 
+## How to install
+```
+git clone https://github.com/wrnlb666/dict.git
+cd dict
+make
+```
+
 ## Example for quick start
 ```c
 #include "src/dict.h"
