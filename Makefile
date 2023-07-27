@@ -14,6 +14,7 @@ else
     ifeq ($(UNAME_S),Linux)
         CFLAG += -Wno-unused-result
 		POST_FIX = so
+		CFLAG += -Wl,-rpath=./
 		LIB += -L. -ldict
 		ELF_FILES := $(shell find . -type f -executable -exec sh -c 'file -b {} | grep -q ELF' \; -print)
     endif
@@ -26,7 +27,7 @@ dict: $(DIR)/dict.c $(DIR)/dict.h
 	$(CC) $(CFLAG) -fPIC -shared $< -o lib$@.$(POST_FIX)
 
 test%: test%.c
-	$(CC) $(CFLAG) -Wl,-rpath=./ $< -o test $(LIB)
+	$(CC) $(CFLAG) $< -o test $(LIB)
 
 clean:
 	rm *.dll *.exe *.o *.bin $(ELF_FILES)
