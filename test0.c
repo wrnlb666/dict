@@ -19,7 +19,7 @@ int main( void )
     // iterate 30 times and print the values. 
     for ( int32_t i = 0; i < 30; i++ )
     {
-        printf( "[key]: %2" PRId32 ", [val]: %5lf\n", i, dict_double( dict, i ) );
+        printf( "[key]: %2" PRId32 ", [val]: %4.2lf\n", i, dict_double( dict, i ) );
     }
 
     // destroy the dictionary, free up the memory used by it. 
