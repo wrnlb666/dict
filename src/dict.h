@@ -28,7 +28,7 @@ typedef enum
     DICT_STRUCT,   // struct
 } dict_type_t;
 
-typedef void (*dict_deep_copy)( void* dest, const void* restrict src );     // if not specified, memcpy will be performed for DICT_STRUCT, strdup will be performed for DICT_STR, shallow copy for all others
+typedef void (*dict_deep_copy)( void* dest, const void* src );              // if not specified, memcpy will be performed for DICT_STRUCT, strdup will be performed for DICT_STR, shallow copy for all others
 typedef void (*dict_desctructor)( void* ptr );                              // needs to be specified if has inner allocation
 
 typedef int (*dict_cmpr)( const void* ptr1, const void* ptr2 );             // used to compare if key is equal, return 0 if equal. 
