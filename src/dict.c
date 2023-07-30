@@ -635,41 +635,46 @@ const void* dict_key( const dict_t* restrict dict, size_t* restrict size )
 }
 
 
-bool dict_serialize( const dict_t* restrict dict, FILE* fp )
+void* dict_serialize( const dict_t* restrict dict, size_t* restrict bytes )
 {
-    errno = 0;
-    // store key size and val size
+    // calculate key size and val size
     uint32_t size = dict_len( dict );
     uint32_t key_val_size[3] = { dict->key.size, dict->val.size, size };
-    fwrite( &key_val_size, sizeof (uint32_t), 3, fp );
+    size_t   elem_size = dict->key.size + dict->val.size;
+
+    // calculate total size
+    *bytes = size * ( dict->key.size + dict->val.size ) + sizeof (uint32_t) * 3;
+    void* data = dict->alloc.malloc( *bytes );
+    if ( data == NULL )
+    {
+        *bytes = 0;
+        return NULL;
+    }
+    char* ptr = data;
+
+    // store header
+    memcpy( ptr, key_val_size, sizeof (uint32_t) * 3 );
+    ptr += sizeof (uint32_t) * 3;
 
     // store individual items
     for ( size_t i = 0; i < dict->mod; i++ )
     {
         for ( dict_elem_t* curr = dict->list[i].head; curr != NULL; curr = curr->next )
         {
-            fwrite( curr->key, dict->key.size + dict->val.size, 1, fp );
+            memcpy( ptr, curr->key, elem_size );
+            ptr += elem_size;
         }
     }
-    if ( errno != 0 )
-    {
-        fprintf( stderr, "[ERRO]: %s.\n", strerror(errno) );
-        return false;
-    }
-    return true;
+    return data;
 }
 
 
-dict_t* dict_deserialize( dict_args_t args, FILE* fp )
+dict_t* dict_deserialize( dict_args_t args, const void* restrict data )
 {
-    errno = 0;
+    const char* ptr = data;
     uint32_t key_val_size[3];
-    fread( key_val_size, sizeof (uint32_t), 3, fp );
-    if ( errno != 0 )
-    {
-        fprintf( stderr, "[ERRO]: %s.\n", strerror(errno) );
-        return NULL;
-    }
+    memcpy( key_val_size, ptr, sizeof (uint32_t) * 3 );
+    ptr += sizeof (uint32_t) * 3;
 
     size_t key_size;
     switch ( args.key.type )
@@ -694,6 +699,7 @@ dict_t* dict_deserialize( dict_args_t args, FILE* fp )
 
     size_t val_size = ( args.val.size + ( sizeof (uintptr_t) - 1 ) ) & ~( sizeof (uintptr_t) - 1 );
 
+    printf( "%d, %d\n", key_val_size[0], key_val_size[1] );
     if ( key_size != key_val_size[0] )
     {
         fprintf( stderr, "[ERRO]: key type conflict, file corrupted.\n" );
@@ -736,12 +742,10 @@ dict_t* dict_deserialize( dict_args_t args, FILE* fp )
     dict->mod = DEFAULT_MOD;
     dict->list  = dict->alloc.malloc( sizeof (dict_list_t) * dict->mod );
     ASSERT_MEM( dict->list );
-    for ( size_t i = 0; i < dict->mod; i++ )
-    {
-        memset( &( dict->list[i]), 0, sizeof (dict_list_t) );
-    }
+    memset( dict->list, 0, sizeof (dict_list_t) * dict->mod );
 
     // assign all the values
+    size_t elem_size = dict->key.size + dict->val.size;
     size_t index;
     uint64_t code;
     dict_elem_t* elem;
@@ -749,7 +753,8 @@ dict_t* dict_deserialize( dict_args_t args, FILE* fp )
     {
         elem = dict->alloc.malloc( sizeof (dict_elem_t) + dict->key.size + dict->val.size );
         ASSERT_MEM( elem );
-        fread( elem->key, dict->key.size + dict->val.size, 1, fp );
+        memcpy( elem->key, ptr, elem_size );
+        ptr += elem_size;
         code = dict_get_hash( dict, elem->key );
         elem->code = code;
         index = code % dict->mod;
@@ -764,13 +769,6 @@ dict_t* dict_deserialize( dict_args_t args, FILE* fp )
             dict->list[ index ].tail->next = elem;
             dict->list[ index ].tail = elem;
         }
-    }
-
-    if ( errno != 0 )
-    {
-        fprintf( stderr, "[ERRO]: %s.\n", strerror(errno) );
-        dict_destroy( dict );
-        return NULL;
     }
 
     size_t max = 0;
