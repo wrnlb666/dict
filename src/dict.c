@@ -101,15 +101,15 @@ static inline void* dict_get_key( const dict_t* restrict dict, va_list ap )
     {
         switch ( dict->key.type )
         {
-            case DICT_CHAR:         *(char*)        key = va_arg( ap, int );          break;
-            case DICT_WCHAR:        *(wchar_t*)     key = va_arg( ap, int );          break;
-            case DICT_I32:          *(int32_t*)     key = va_arg( ap, int32_t );      break;
-            case DICT_U32:          *(uint32_t*)    key = va_arg( ap, uint32_t );     break;
-            case DICT_F32:          *(float*)       key = va_arg( ap, double );       break;
-            case DICT_I64:          *(int64_t*)     key = va_arg( ap, int64_t );      break;
-            case DICT_U64:          *(uint64_t*)    key = va_arg( ap, uint64_t );     break;
-            case DICT_F64:          *(double*)      key = va_arg( ap, double );       break;
-            case DICT_PTR:          *(void**)       key = va_arg( ap, void* );        break;
+            case DICT_CHAR:         *(char*)        key = va_arg( ap, int );            break;
+            case DICT_WCHAR:        *(wchar_t*)     key = va_arg( ap, int );            break;
+            case DICT_I32:          *(int32_t*)     key = va_arg( ap, int32_t );        break;
+            case DICT_U32:          *(uint32_t*)    key = va_arg( ap, uint32_t );       break;
+            case DICT_F32:          *(float*)       key = va_arg( ap, double );         break;
+            case DICT_I64:          *(int64_t*)     key = va_arg( ap, int64_t );        break;
+            case DICT_U64:          *(uint64_t*)    key = va_arg( ap, uint64_t );       break;
+            case DICT_F64:          *(double*)      key = va_arg( ap, double );         break;
+            case DICT_PTR:          *(void**)       key = va_arg( ap, void* );          break;
             case DICT_STR:
             {
                 char* str = va_arg( ap, char* );
@@ -124,10 +124,7 @@ static inline void* dict_get_key( const dict_t* restrict dict, va_list ap )
                 memcpy( key, data, dict->key.size );
                 break;
             }
-            default:
-            {
-                return ( fprintf( stderr, "[ERRO]: illegal type.\n" ), exit(1), NULL );
-            }
+            default:                fprintf( stderr, "[ERRO]: illegal type.\n" );       exit(1);
         }
     }
     return key;
@@ -406,7 +403,8 @@ void* dict_get( dict_t* restrict dict, ... )
                 }
                 default:
                 {
-                    return ( fprintf( stderr, "[ERRO]: illegal type.\n" ), exit(1), NULL );
+                    fprintf( stderr, "[ERRO]: illegal type.\n" );
+                    exit(1);
                 }
             }
         }
@@ -519,7 +517,8 @@ bool dict_remove( dict_t* restrict dict, ... )
                 }
                 default:
                 {
-                    return ( fprintf( stderr, "[ERRO]: illegal type.\n" ), exit(1), NULL );
+                    fprintf( stderr, "[ERRO]: illegal type.\n" );
+                    exit(1);
                 }
             }
         }
@@ -587,7 +586,8 @@ bool dict_has( const dict_t* restrict dict, ... )
                 }
                 default:
                 {
-                    return ( fprintf( stderr, "[ERRO]: illegal type.\n" ), exit(1), NULL );
+                    fprintf( stderr, "[ERRO]: illegal type.\n" );
+                    exit(1);
                 }
             }
         }
@@ -702,13 +702,13 @@ dict_t* dict_deserialize( dict_args_t args, const void* restrict data )
     printf( "%d, %d\n", key_val_size[0], key_val_size[1] );
     if ( key_size != key_val_size[0] )
     {
-        fprintf( stderr, "[ERRO]: key type conflict, file corrupted.\n" );
+        fprintf( stderr, "[ERRO]: key type conflict, data corrupted.\n" );
         return NULL;
     }
 
     if ( val_size != key_val_size[1] )
     {
-        fprintf( stderr, "[ERRO]: val type conflict, file corrupted.\n" );
+        fprintf( stderr, "[ERRO]: val type conflict, data corrupted.\n" );
         return NULL;
     }
 
