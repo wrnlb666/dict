@@ -12,7 +12,7 @@ ifeq ($(OS),Windows_NT)
 else
 	UNAME_S := $(shell uname -s)
     ifeq ($(UNAME_S),Linux)
-        CFLAG += -Wno-unused-result -fsanitize=leak,address
+        CFLAG += -Wno-unused-result
 		POST_FIX = so
 		CFLAG += -Wl,-rpath=./
 		LIB += -L. -ldict
