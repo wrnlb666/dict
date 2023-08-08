@@ -637,13 +637,54 @@ const void* dict_key( const dict_t* restrict dict, size_t* restrict size )
 
 void* dict_serialize( const dict_t* restrict dict, size_t* restrict bytes )
 {
+    size_t space;
+    if ( bytes == NULL )
+    {
+        bytes = &space;
+    }
+
     // calculate key size and val size
     uint32_t size = dict_len( dict );
     uint32_t key_val_size[3] = { dict->key.size, dict->val.size, size };
-    size_t   elem_size = dict->key.size + dict->val.size;
+    size_t   elem_size = dict->key.type == DICT_STR ? sizeof (uint32_t) + dict->val.size : dict->key.size + dict->val.size;
 
     // calculate total size
-    *bytes = size * ( dict->key.size + dict->val.size ) + sizeof (uint32_t) * 3;
+    if ( dict->key.type == DICT_STR )
+    {
+        *bytes = sizeof (uint32_t) * 3 + size * elem_size;
+    }
+    else
+    {
+        *bytes = sizeof (uint32_t) * 3 + size * elem_size;
+    }
+
+    // calculate key size if string type
+    #ifdef __STDC_NO_VLA__
+        uint32_t* strlen_table;
+        if (dict->key.type == DICT_STR )
+        {
+            strlen_table = dict->alloc.malloc( sizeof (uint32_t) * size );
+            ASSERT_MEM( strlen_table );
+        }
+    #else
+        uint32_t strlen_table[size];
+    #endif  // __STDC_NO_VLA__
+    if ( dict->key.type == DICT_STR )
+    {
+        size_t index = 0;
+        for ( size_t i = 0; i < dict->mod; i++ )
+        {
+            for ( dict_elem_t* curr = dict->list[i].head; curr != NULL; curr = curr->next )
+            {
+                strlen_table[index] = (uint32_t) strlen( *(char**) curr->key );
+                *bytes += strlen_table[index];
+                index++;
+            }
+        }
+    }
+
+
+    // allocate memory
     void* data = dict->alloc.malloc( *bytes );
     if ( data == NULL )
     {
@@ -657,14 +698,44 @@ void* dict_serialize( const dict_t* restrict dict, size_t* restrict bytes )
     ptr += sizeof (uint32_t) * 3;
 
     // store individual items
-    for ( size_t i = 0; i < dict->mod; i++ )
+    if ( dict->key.type == DICT_STR )
     {
-        for ( dict_elem_t* curr = dict->list[i].head; curr != NULL; curr = curr->next )
+        size_t index = 0;
+        char* str_ptr = ptr + size * elem_size;
+        for ( size_t i = 0; i < dict->mod; i++ )
         {
-            memcpy( ptr, curr->key, elem_size );
-            ptr += elem_size;
+            for ( dict_elem_t* curr = dict->list[i].head; curr != NULL; curr = curr->next )
+            {
+                memcpy( ptr, &strlen_table[index], sizeof (uint32_t) );
+                ptr += sizeof (uint32_t);
+                memcpy( ptr, curr->key + dict->key.size, dict->val.size );
+                ptr += dict->val.size;
+                memcpy( str_ptr, *(char**) curr->key, strlen_table[index] );
+                str_ptr += strlen_table[index];
+                index++;
+            }
         }
     }
+    else
+    {
+        for ( size_t i = 0; i < dict->mod; i++ )
+        {
+            for ( dict_elem_t* curr = dict->list[i].head; curr != NULL; curr = curr->next )
+            {
+                memcpy( ptr, curr->key, elem_size );
+                ptr += elem_size;
+            }
+        }
+    }
+
+    // clean up memory allocation
+    #ifdef __STDC_NO_VLA__
+        if ( dict->key.type != DICT_STR && dict->alloc.free != NULL )
+        {
+            dict->alloc.free( strlen_table );
+        }
+    #endif  // __STDC_NO_VLA__
+
     return data;
 }
 
@@ -699,7 +770,6 @@ dict_t* dict_deserialize( dict_args_t args, const void* restrict data )
 
     size_t val_size = ( args.val.size + ( sizeof (uintptr_t) - 1 ) ) & ~( sizeof (uintptr_t) - 1 );
 
-    printf( "%d, %d\n", key_val_size[0], key_val_size[1] );
     if ( key_size != key_val_size[0] )
     {
         fprintf( stderr, "[ERRO]: key type conflict, data corrupted.\n" );
@@ -745,29 +815,64 @@ dict_t* dict_deserialize( dict_args_t args, const void* restrict data )
     memset( dict->list, 0, sizeof (dict_list_t) * dict->mod );
 
     // assign all the values
-    size_t elem_size = dict->key.size + dict->val.size;
+    size_t elem_size = dict->key.type == DICT_STR ? sizeof (uint32_t) + dict->val.size : dict->key.size + dict->val.size;
     size_t index;
     uint64_t code;
     dict_elem_t* elem;
-    for ( size_t i = 0; i < key_val_size[2]; i++ )
+    if ( dict->key.type == DICT_STR )
     {
-        elem = dict->alloc.malloc( sizeof (dict_elem_t) + dict->key.size + dict->val.size );
-        ASSERT_MEM( elem );
-        memcpy( elem->key, ptr, elem_size );
-        ptr += elem_size;
-        code = dict_get_hash( dict, elem->key );
-        elem->code = code;
-        index = code % dict->mod;
-        elem->prev = dict->list[ index ].tail;
-        elem->next = NULL;
-        if ( dict->list[ index ].size++ == 0 )
+        const char* str_ptr = ptr + key_val_size[2] * elem_size;
+        for ( size_t i = 0; i < key_val_size[2]; i++ )
         {
-            dict->list[ index ].head = dict->list[ index ].tail = elem;
+            elem = dict->alloc.malloc( sizeof (dict_elem_t) + dict->key.size + dict->val.size );
+            ASSERT_MEM( elem );
+            // copy string
+            *(char**) elem->key = dict->alloc.malloc( *(uint32_t*) ptr + 1 );
+            ASSERT_MEM( elem->key );
+            memcpy( *(char**) elem->key, str_ptr, *(uint32_t*) ptr );
+            ( *(char**) elem->key )[ *(uint32_t*) ptr ] = 0;
+            str_ptr += *(uint32_t*) ptr;
+            ptr += sizeof (uint32_t);
+            memcpy( elem->key + dict->key.size, ptr, dict->val.size );
+            ptr += dict->val.size;
+            code = dict_get_hash( dict, elem->key );
+            elem->code = code;
+            index = code % dict->mod;
+            elem->prev = dict->list[index].tail;
+            elem->next = NULL;
+            if ( dict->list[index].size++ == 0 )
+            {
+                dict->list[index].head = dict->list[index].tail = elem;
+            }
+            else 
+            {
+                dict->list[index].tail->next = elem;
+                dict->list[index].tail = elem;
+            }
         }
-        else
+    }
+    else 
+    {
+        for ( size_t i = 0; i < key_val_size[2]; i++ )
         {
-            dict->list[ index ].tail->next = elem;
-            dict->list[ index ].tail = elem;
+            elem = dict->alloc.malloc( sizeof (dict_elem_t) + dict->key.size + dict->val.size );
+            ASSERT_MEM( elem );
+            memcpy( elem->key, ptr, elem_size );
+            ptr += elem_size;
+            code = dict_get_hash( dict, elem->key );
+            elem->code = code;
+            index = code % dict->mod;
+            elem->prev = dict->list[index].tail;
+            elem->next = NULL;
+            if ( dict->list[index].size++ == 0 )
+            {
+                dict->list[index].head = dict->list[index].tail = elem;
+            }
+            else
+            {
+                dict->list[index].tail->next = elem;
+                dict->list[index].tail = elem;
+            }
         }
     }
 
