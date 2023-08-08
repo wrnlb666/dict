@@ -1,5 +1,5 @@
 CC = gcc
-CFLAG = -Wall -Wextra -Wpedantic -std=c17 -g
+CFLAG = -Wall -Wextra -Wpedantic -std=c2x -g
 DIR = src
 OBJ = dict.o
 LIB = 
@@ -12,7 +12,7 @@ ifeq ($(OS),Windows_NT)
 else
 	UNAME_S := $(shell uname -s)
     ifeq ($(UNAME_S),Linux)
-        CFLAG += -Wno-unused-result
+        CFLAG += -Wno-unused-result -fsanitize=leak,address
 		POST_FIX = so
 		CFLAG += -Wl,-rpath=./
 		LIB += -L. -ldict
